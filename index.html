@@ -1,162 +1,26 @@
-<!doctype html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'>
-<link rel="manifest" href="manifest.json"><meta name="theme-color" content="#0b1220"><title>KHAN AND TEAMS — EduCRM</title>
-<style>
-body{margin:0;font-family:Inter,system-ui,Arial;background:#0b1220;color:#e5e7eb}
-.shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
-.side{background:#0f172a;border-right:1px solid #1f2a44;padding:12px;display:flex;flex-direction:column;gap:8px}
-.brand{display:flex;gap:8px;align-items:center}.brand img{width:36px;height:36px;border-radius:8px;border:1px solid #1f2a44;background:#000;object-fit:contain}
-.nav button{width:100%;text-align:left;padding:8px 10px;border-radius:10px;border:1px solid #1f2a44;background:#0b1220;color:#fff;cursor:pointer;margin:3px 0}
-.nav .danger{background:#ef4444;border-color:#ef4444}
-.main{padding:12px}
-.card{background:#0b1220;border:1px solid #1f2a44;border-radius:12px;padding:12px;box-shadow:0 10px 24px rgba(0,0,0,.25);margin-bottom:12px}
-.row{display:grid;gap:8px}.row2{grid-template-columns:1fr 1fr}.row3{grid-template-columns:1fr 1fr 1fr}
-label{font-size:12px;font-weight:800;margin-bottom:4px;display:block}
-input,select,textarea{width:100%;padding:8px;border-radius:10px;border:1px solid #1f2a44;background:#0b1220;color:#e5e7eb}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th,td{border-bottom:1px solid #1f2a44;padding:8px;text-align:left}
-.pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #1f2a44;font-size:11px}
-.lock{position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10}
-.muted{color:#94a3b8;font-size:12px}
-.btn{padding:8px 12px;border-radius:10px;border:1px solid #1f2a44;background:#1d2a52;color:#fff;cursor:pointer}
-.btn.primary{background:#5b8cff;border-color:#5b8cff}.btn.ok{background:#22c55e;border-color:#22c55e}.btn.warn{background:#f59e0b;border-color:#f59e0b}.btn.bad{background:#ef4444;border-color:#ef4444}
-.wm{position:fixed;pointer-events:none;opacity:.06;transform:rotate(-30deg);font-weight:900;font-size:56px;left:-10%;top:40%}
-.small{font-size:12px}
-</style>
-<script>
-if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));}
-const KEY='knt_educrm_v3';
-(function seed(){try{if(!localStorage.getItem(KEY)){localStorage.setItem(KEY,JSON.stringify(SEED_JSON));}}catch(e){console.warn(e)}})();
-const qs=id=>document.getElementById(id);
-const today=()=>new Date().toISOString().slice(0,10);
-const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-function load(){try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){return{}}}
-function save(db){localStorage.setItem(KEY,JSON.stringify(db))}
-function uuid(){return Math.random().toString(36).slice(2,10)}
-let DB=load(), USER=null, sessEnd=0, tmr=null;
-function startSess(mins){sessEnd=Date.now()+mins*60*1000;if(tmr)clearInterval(tmr);tmr=setInterval(()=>{const l=Math.max(0,Math.floor((sessEnd-Date.now())/1000));qs('sess').textContent=(Math.floor(l/60))+'m '+(l%60)+'s';if(l<=0){logout();alert('Session expired')}},1000);}
-function loginInit(){qs('lock').style.display='flex';qs('app').style.display='none';}
-async function sha(s){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
-async function login(){const email=qs('lemail').value.trim().toLowerCase(), pass=await sha(qs('lpass').value); const u=(DB.users||[]).find(x=>x.email===email&&x.pass===pass); if(!u){qs('lmsg').textContent='Invalid credentials';return} USER=u; qs('who').textContent=u.name+' ('+u.role+')'; qs('lock').style.display='none'; qs('app').style.display='grid'; startSess(DB.settings?.sess||60); renderAll();}
-function logout(){USER=null; qs('app').style.display='none'; loginInit();}
-function nav(v){['dash','students','tasks','payments','reports','sop','team','partners'].forEach(x=>qs('v_'+x).style.display='none'); qs('v_'+v).style.display='block'; renderAll();}
-function renderAll(){renderDash(); renderStudents(); renderTasks(); renderPayments(); renderReports(); renderSOP(); renderUsers(); renderPartners();}
-function renderDash(){qs('today').textContent=today(); qs('stat_students').textContent=(DB.students||[]).length; qs('stat_tasks').textContent=(DB.tasks||[]).filter(t=>t.due===today()&&t.state!=='Done').length; const paid=(DB.payments||[]).filter(p=>p.status==='Paid').reduce((a,b)=>a+(+b.amount||0),0); const total=(DB.payments||[]).reduce((a,b)=>a+(+b.amount||0),0); qs('billed').textContent=total; qs('collected').textContent=paid; qs('out').textContent=(total-paid); }
-function renderStudents(){const tb=qs('st_body'); tb.innerHTML=''; (DB.students||[]).forEach(s=>{const tr=document.createElement('tr'); tr.innerHTML='<td>'+esc(s.name)+'</td><td>'+esc(s.subject||'')+'</td><td>'+esc(s.destination||'')+'</td><td>'+esc(s.intake||'')+'</td><td><span class=pill>'+esc(s.status||'Lead')+'</span></td><td>'+esc(s.owner||'')+'</td><td><button class=btn onclick="openStudent(\''+s.id+'\')">Edit</button> <button class="btn warn" onclick="taskFor(\''+s.id+'\')">+Task</button> <button class="btn bad" onclick="delStudent(\''+s.id+'\')">Delete</button></td>'; tb.appendChild(tr)}); prepStudentPick(); }
-function openStudent(id){const s=(DB.students||[]).find(x=>x.id===id)||{id:null}; qs('sid').value=s.id||''; qs('sname').value=s.name||''; qs('ssub').value=s.subject||''; qs('sdest').value=s.destination||'Canada'; qs('sedu').value=s.education||''; qs('sintake').value=s.intake||''; qs('sstatus').value=s.status||'Lead'; qs('sowner').value=s.owner||USER?.name||''; qs('scontact').value=s.contact||''; qs('snotes').value=s.notes||''; qs('s_form').style.display='block'; }
-function saveStudentForm(){const id=qs('sid').value or null; const obj={id:id or uuid(), name:qs('sname').value.trim(), subject:qs('ssub').value.trim(), destination:qs('sdest').value, education:qs('sedu').value.trim(), intake:qs('sintake').value.trim(), status:qs('sstatus').value, owner:qs('sowner').value.trim(), contact:qs('scontact').value.trim(), notes:qs('snotes').value.trim()}; if(!obj.name){alert('Name required');return} const i=(DB.students||[]).findIndex(x=>x.id===obj.id); if(i>=0) DB.students[i]=obj; else (DB.students||DB.students.push) && DB.students.push(obj); save(DB); qs('s_form').style.display='none'; renderStudents();}
-function delStudent(id){if(!confirm('Delete student?'))return; DB.students=DB.students.filter(x=>x.id!==id); DB.tasks=(DB.tasks||[]).filter(t=>t.student!==id); DB.payments=(DB.payments||[]).filter(p=>p.student!==id); save(DB); renderAll();}
-function taskFor(id){openTask(null,id);}
-function renderTasks(){const tb=qs('t_body'); tb.innerHTML=''; (DB.tasks||[]).forEach(t=>{const s=(DB.students||[]).find(x=>x.id===t.student)||{name:'—'}; const tr=document.createElement('tr'); tr.innerHTML='<td>'+esc(t.title)+'</td><td>'+esc(s.name)+'</td><td>'+esc(t.owner||'')+'</td><td>'+esc(t.due||'')+'</td><td>'+esc(t.state)+'</td><td><button class=btn onclick="openTask(\''+t.id+'\')">Edit</button> <button class="btn bad" onclick="delTask(\''+t.id+'\')">Delete</button></td>'; tb.appendChild(tr)}); prepTaskPick(); }
-function openTask(id,forStu){const t=(DB.tasks||[]).find(x=>x.id===id)||{id:null,title:'',student:forStu||'',owner:USER?.name||'',due:today(),state:'Open',notes:''}; qs('tid').value=t.id||''; qs('ttitle').value=t.title; qs('tstudent').value=t.student||''; qs('tdue').value=t.due; qs('tstate').value=t.state; qs('tnotes').value=t.notes; qs('t_form').style.display='block';}
-function saveTaskForm(){const id=qs('tid').value or null; const t={id:id or uuid(), title:qs('ttitle').value.trim(), student:qs('tstudent').value, owner:qs('towner').value.trim(), due:qs('tdue').value, state:qs('tstate').value, notes:qs('tnotes').value.trim()}; if(!t.title||!t.student){alert('Task + student required');return} const i=(DB.tasks||[]).findIndex(x=>x.id===t.id); if(i>=0) DB.tasks[i]=t; else DB.tasks.push(t); save(DB); qs('t_form').style.display='none'; renderTasks();}
-function delTask(id){if(!confirm('Delete task?'))return; DB.tasks=DB.tasks.filter(x=>x.id!==id); save(DB); renderTasks();}
-function renderPayments(){const tb=qs('p_body'); tb.innerHTML=''; (DB.payments||[]).forEach(p=>{const s=(DB.students||[]).find(x=>x.id===p.student)||{name:'—'}; const tr=document.createElement('tr'); tr.innerHTML='<td>'+esc(p.inv)+'</td><td>'+esc(s.name)+'</td><td>'+esc(p.currency||'BDT')+' '+(p.amount||0)+'</td><td>'+esc(p.due||'')+'</td><td>'+esc(p.status)+'</td><td>'+esc(p.method||'')+'</td><td><button class=btn onclick="openInv(\''+p.id+'\')">Edit</button> <button class="btn bad" onclick="delInv(\''+p.id+'\')">Delete</button></td>'; tb.appendChild(tr)}); prepInvoicePick(); }
-function openInv(id){const p=(DB.payments||[]).find(x=>x.id===id)||{id:null,inv:'INV-'+uuid().toUpperCase(),student:'',amount:0,currency:'BDT',due:today(),status:'Unpaid',method:'Cash',link:'',notes:''}; qs('pid').value=p.id||''; qs('pinv').value=p.inv; qs('pstudent').value=p.student||''; qs('pamt').value=p.amount; qs('pc').value=p.currency; qs('pdue').value=p.due; qs('pstatus').value=p.status; qs('pmethod').value=p.method; qs('plink').value=p.link; qs('pnotes').value=p.notes; qs('p_form').style.display='block';}
-function saveInvForm(){const id=qs('pid').value or null; const p={id:id or uuid(), inv:qs('pinv').value.trim(), student:qs('pstudent').value, amount:parseFloat(qs('pamt').value||'0'), currency:qs('pc').value, due:qs('pdue').value, status:qs('pstatus').value, method:qs('pmethod').value, link:qs('plink').value.trim(), notes:qs('pnotes').value.trim()}; if(!p.student||!p.amount){alert('Student + amount required');return} const i=(DB.payments||[]).findIndex(x=>x.id===p.id); if(i>=0) DB.payments[i]=p; else DB.payments.push(p); save(DB); qs('p_form').style.display='none'; renderPayments(); }
-function delInv(id){if(!confirm('Delete invoice?'))return; DB.payments=DB.payments.filter(x=>x.id!==id); save(DB); renderPayments();}
-function renderReports(){const paid=(DB.payments||[]).filter(p=>p.status==='Paid').reduce((a,b)=>a+(+b.amount||0),0); const total=(DB.payments||[]).reduce((a,b)=>a+(+b.amount||0),0); const out=total-paid; qs('r_summary').textContent='Paid '+paid+' | Total '+total+' | Outstanding '+out; }
-function renderSOP(){const sel=qs('pick'); sel.innerHTML=''; (DB.students||[]).forEach(s=>{const o=document.createElement('option'); o.value=s.id; o.textContent=s.name; sel.appendChild(o)});}
-function genSOP(){const id=qs('pick').value; const s=(DB.students||[]).find(x=>x.id===id); if(!s){alert('Pick student');return} const sop='I am applying for '+(s.subject||'the program')+'. My name is '+s.name+'. I completed '+(s.education||'my prior studies')+'. I chose '+(s.destination||'the destination')+' for quality education and career opportunities.'; const gs='I am a genuine temporary entrant for '+(s.destination||'the destination')+' with the primary intent to study '+(s.subject||'my chosen program')+'. I will comply with all visa conditions.'; qs('sop').value=sop; qs('gs').value=gs;}
-function prepStudentPick(){const sel=qs('tstudent'); sel.innerHTML='<option value="">Select student</option>'; (DB.students||[]).forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.name;sel.appendChild(o)});}
-function prepTaskPick(){prepStudentPick();}
-function prepInvoicePick(){const sel=qs('pstudent'); sel.innerHTML='<option value="">Select student</option>'; (DB.students||[]).forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.name;sel.appendChild(o)});}
-function renderUsers(){const tb=qs('u_body'); tb.innerHTML=''; (DB.users||[]).forEach(u=>{const tr=document.createElement('tr'); tr.innerHTML='<td>'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td>'+u.role+'</td>'; tb.appendChild(tr)});}
-function addUser(){if(!USER|| (USER.role!=='superadmin'&&USER.role!=='admin')){alert('Only superadmin/admin');return} const name=qs('uname').value.trim(), email=qs('uemail').value.trim().toLowerCase(), pass=qs('upass').value; const role=qs('urole').value; if(!name||!email||!pass){alert('Fill all');return} const exists=(DB.users||[]).some(x=>x.email===email); if(exists){alert('Email exists');return} sha(pass).then(h=>{(DB.users||[]).push({id:uuid(),name,email,pass:h,role}); save(DB); renderUsers(); qs('uname').value=qs('uemail').value=qs('upass').value='';});}
-function resetSA(){if(!USER||USER.role!=='superadmin'){alert('Only superadmin');return} const p=prompt('Enter NEW Superadmin password:'); if(!p) return; sha(p).then(h=>{const sa=(DB.users||[]).find(x=>x.role==='superadmin'); if(sa){sa.pass=h; save(DB); alert('Superadmin password updated.')}});}
-document.addEventListener('DOMContentLoaded',()=>{loginInit(); qs('lemail').value='info@khanandteamseducation.com'; qs('brand').textContent=DB.settings?.brand||'KHAN AND TEAMS'; document.querySelectorAll('.navbtn').forEach(b=>b.onclick=()=>nav(b.dataset.v)); qs('login').onclick=login; qs('logout').onclick=logout; qs('addStu').onclick=()=>openStudent(''); qs('s_save').onclick=saveStudentForm; qs('t_add').onclick=()=>openTask(''); qs('t_save').onclick=saveTaskForm; qs('p_add').onclick=()=>openInv(''); qs('p_save').onclick=saveInvForm; qs('gen').onclick=genSOP; qs('u_add').onclick=addUser; qs('u_reset').onclick=resetSA; });
-</script>
+<!doctype html>
+<html lang='en'>
+<head>
+  <meta charset='utf-8'>
+  <meta name='viewport' content='width=device-width,initial-scale=1'>
+  <title>KHAN AND TEAMS — EduCRM PRO</title>
+  <link rel="manifest" href="manifest.json">
+  <script type="module">
+    // Replace with your Firebase config from Firebase Console
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_AUTH_DOMAIN",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_STORAGE_BUCKET",
+      messagingSenderId: "YOUR_MSG_ID",
+      appId: "YOUR_APP_ID"
+    };
+    console.log("Firebase config placeholder loaded:", firebaseConfig);
+  </script>
 </head>
 <body>
-<div class="wm">KHAN AND TEAMS</div>
-<div id="lock" class="lock">
-  <div class="card" style="width:min(520px,92vw)">
-    <h2>Login — KHAN AND TEAMS EduCRM</h2>
-    <div class="row row2"><div><label>Email</label><input id="lemail" value=""></div><div><label>Password</label><input id="lpass" type="password"></div></div>
-    <div class="between"><button id="login" class="btn primary">Login</button><div class="muted" id="lmsg"></div></div>
-  </div>
-</div>
-<div id="app" class="shell" style="display:none">
-  <aside class="side">
-    <div class="brand"><img id="logo"><div><div id="brand" style="font-weight:900">KHAN AND TEAMS</div><div class="muted" id="who">—</div></div></div>
-    <div class="nav">
-      <button class="navbtn" data-v="dash">Dashboard</button>
-      <button class="navbtn" data-v="students">Students</button>
-      <button class="navbtn" data-v="tasks">Tasks</button>
-      <button class="navbtn" data-v="payments">Payments</button>
-      <button class="navbtn" data-v="reports">Reports</button>
-      <button class="navbtn" data-v="sop">SOP/GS</button>
-      <button class="navbtn" data-v="team">Teams</button>
-      <button class="navbtn" data-v="partners">Partners</button>
-      <button id="logout" class="danger">Logout</button>
-    </div>
-    <div class="card small">Session left: <span id="sess">—</span> • Today: <span id="today"></span></div>
-  </aside>
-  <main class="main">
-    <section id="v_dash" class="card">
-      <h2>Dashboard</h2>
-      <div class="row row3" style="margin-top:8px">
-        <div class="card"><div class="muted">Students</div><div id="stat_students" style="font-size:22px;font-weight:900">0</div></div>
-        <div class="card"><div class="muted">Tasks Today</div><div id="stat_tasks" style="font-size:22px;font-weight:900">0</div></div>
-        <div class="card"><div class="muted">Billed/Collected/Outstanding</div><div class="small">BDT <span id="billed">0</span> / <span id="collected">0</span> / <span id="out">0</span></div></div>
-      </div>
-    </section>
-    <section id="v_students" class="card" style="display:none">
-      <div class="between"><h2>Students</h2><button id="addStu" class="btn ok">+ Add</button></div>
-      <div class="card"><table><thead><tr><th>Name</th><th>Subject</th><th>Destination</th><th>Intake</th><th>Status</th><th>Owner</th><th>Actions</th></tr></thead><tbody id="st_body"></tbody></table></div>
-      <div id="s_form" class="card" style="display:none">
-        <input id="sid" type="hidden"><div class="row row3"><div><label>Name</label><input id="sname"></div><div><label>Subject</label><input id="ssub"></div><div><label>Destination</label><select id="sdest"><option>Australia</option><option>Canada</option><option>UK</option><option>USA</option><option>Germany</option><option>Ireland</option><option>Netherlands</option><option>Other</option></select></div></div>
-        <div class="row row3"><div><label>Education</label><input id="sedu"></div><div><label>Intake</label><input id="sintake"></div><div><label>Status</label><select id="sstatus"><option>Lead</option><option>Applied</option><option>Offer</option><option>Visa</option><option>Enrolled</option></select></div></div>
-        <div class="row row2"><div><label>Owner</label><input id="sowner"></div><div><label>Contact</label><input id="scontact"></div></div>
-        <div><label>Notes</label><textarea id="snotes"></textarea></div>
-        <button id="s_save" class="btn primary">Save</button>
-      </div>
-    </section>
-    <section id="v_tasks" class="card" style="display:none">
-      <div class="between"><h2>Tasks</h2><button id="t_add" class="btn ok">+ Add Task</button></div>
-      <div class="card"><table><thead><tr><th>Task</th><th>Student</th><th>Owner</th><th>Due</th><th>Status</th><th>Actions</th></tr></thead><tbody id="t_body"></tbody></table></div>
-      <div id="t_form" class="card" style="display:none">
-        <input id="tid" type="hidden"><div class="row row3"><div><label>Task</label><input id="ttitle"></div><div><label>Student</label><select id="tstudent"></select></div><div><label>Owner</label><input id="towner"></div></div>
-        <div class="row row2"><div><label>Due</label><input id="tdue" type="date"></div><div><label>Status</label><select id="tstate"><option>Open</option><option>Done</option></select></div></div>
-        <div><label>Notes</label><textarea id="tnotes"></textarea></div>
-        <button id="t_save" class="btn primary">Save Task</button>
-      </div>
-    </section>
-    <section id="v_payments" class="card" style="display:none">
-      <div class="between"><h2>Payments</h2><button id="p_add" class="btn ok">+ New Invoice</button></div>
-      <div class="card"><table><thead><tr><th>Invoice</th><th>Student</th><th>Amount</th><th>Due</th><th>Status</th><th>Method</th><th>Actions</th></tr></thead><tbody id="p_body"></tbody></table></div>
-      <div id="p_form" class="card" style="display:none">
-        <input id="pid" type="hidden">
-        <div class="row row3"><div><label>No.</label><input id="pinv"></div><div><label>Student</label><select id="pstudent"></select></div><div><label>Amount</label><input id="pamt" type="number" step="0.01"></div></div>
-        <div class="row row3"><div><label>Currency</label><select id="pc"><option>BDT</option><option>USD</option><option>CAD</option><option>GBP</option><option>AUD</option><option>EUR</option></select></div><div><label>Due</label><input id="pdue" type="date"></div><div><label>Status</label><select id="pstatus"><option>Unpaid</option><option>Part-paid</option><option>Paid</option></select></div></div>
-        <div class="row row2"><div><label>Method</label><select id="pmethod"><option>Cash</option><option>Bank</option><option>Bkash</option><option>Nagad</option><option>Stripe Link</option></select></div><div><label>Payment Link</label><input id="plink" placeholder="https://"></div></div>
-        <div><label>Notes</label><textarea id="pnotes"></textarea></div>
-        <button id="p_save" class="btn primary">Save Invoice</button>
-      </div>
-    </section>
-    <section id="v_reports" class="card" style="display:none">
-      <h2>Reports</h2>
-      <div id="r_summary" class="small muted">—</div>
-    </section>
-    <section id="v_sop" class="card" style="display:none">
-      <div class="between"><h2>SOP & GS</h2><div class="row row2" style="max-width:520px"><select id="pick"></select><button id="gen" class="btn primary">Generate</button></div></div>
-      <div class="row row2" style="margin-top:8px">
-        <div class="card"><h3>SOP</h3><textarea id="sop" style="width:100%;height:200px" readonly></textarea></div>
-        <div class="card"><h3>GS</h3><textarea id="gs" style="width:100%;height:200px" readonly></textarea></div>
-      </div>
-    </section>
-    <section id="v_team" class="card" style="display:none">
-      <h2>Teams</h2>
-      <div class="row row3"><div><label>Name</label><input id="uname"></div><div><label>Email</label><input id="uemail"></div><div><label>Role</label><select id="urole"><option>team</option><option>admin</option></select></div></div>
-      <div class="row row2"><div><label>Password</label><input id="upass" type="password"></div><div><button id="u_add" class="btn ok" style="margin-top:22px">Add User</button></div></div>
-      <div class="row"><button id="u_reset" class="btn warn">Reset Superadmin Password</button></div>
-      <div class="card"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody id="u_body"></tbody></table></div>
-    </section>
-    <section id="v_partners" class="card" style="display:none">
-      <h2>Partners</h2>
-      <div class="small muted">Save portals like ApplyBoard, Adventus, MSM.</div>
-      <div class="card"><table><thead><tr><th>Name</th><th>URL</th><th>Notes</th></tr></thead><tbody id="pr_body"><tr><td>ApplyBoard</td><td><a href="https://www.applyboard.com/" target="_blank">https://www.applyboard.com/</a></td><td>Quick access</td></tr></tbody></table></div>
-    </section>
-  </main>
-</div>
-<script>const SEED_JSON = {"users": [{"id": "superadmin1", "name": "Khan", "email": "info@khanandteamseducation.com", "pass": "8beb73d4a7211f1f2dfb84cd6fd670c613b3c0be2239a5304ea41ecc1c3e2972", "role": "superadmin"}], "settings": {"brand": "KHAN AND TEAMS", "wm": true, "logo": "", "sess": 60}, "security": {"expiry": "", "domains": ""}, "students": [], "tasks": [], "payments": [], "partners": [{"id": "pr1", "name": "ApplyBoard", "url": "https://www.applyboard.com/", "note": "Quick access"}]};</script>
-</body></html>
+  <h1>KHAN AND TEAMS — EduCRM PRO</h1>
+  <p>This is your CRM frontend. Once you paste your Firebase config in <code>index.html</code>, 
+  upload these 4 files (<b>index.html, manifest.json, sw.js, logo.png</b>) to GitHub Pages or Netlify.</p>
+</body>
+</html>
